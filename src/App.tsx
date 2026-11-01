@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowDownRight, ArrowUpRight, BadgeCheck, ChevronDown, ChevronLeft,
   ChevronRight, CircleAlert, Copy, ExternalLink, FileSearch, Globe2, LoaderCircle,
@@ -14,18 +14,13 @@ type HorizonAsset = {
   asset_code: string;
   asset_issuer: string;
   paging_token: string;
-  accounts?: {
-    authorized?: number;
-    authorized_to_maintain_liabilities?: number;
-    unauthorized?: number;
+  amount?: string;
+  num_accounts?: number;
+  flags?: {
+    auth_required?: boolean;
+    auth_revocable?: boolean;
+    auth_immutable?: boolean;
   };
-  balances?: {
-    authorized?: string;
-    authorized_to_maintain_liabilities?: string;
-    unauthorized?: string;
-  };
-  claimable_balances_amount?: string;
-  contracts?: { contract_id?: string };
 };
 
 type AssetPage = {
@@ -103,7 +98,7 @@ function App() {
     return () => controller.abort();
   }, [loadDirectory]);
 
-  const submitSearch = async (event?: React.FormEvent) => {
+  const submitSearch = async (event?: FormEvent) => {
     event?.preventDefault();
     const query = search.trim();
     setAppliedSearch(query);
@@ -151,13 +146,13 @@ function App() {
   };
 
   const sortedAssets = useMemo(() => [...assets].sort((a, b) => {
-    if (sortBy === "accounts") return (b.accounts?.authorized ?? 0) - (a.accounts?.authorized ?? 0);
+    if (sortBy === "accounts") return (b.num_accounts ?? 0) - (a.num_accounts ?? 0);
     return (a.asset_code || "XLM").localeCompare(b.asset_code || "XLM");
   }), [assets, sortBy]);
 
   const pageCount = Math.max(1, Math.ceil(sortedAssets.length / PAGE_SIZE));
   const visibleAssets = sortedAssets.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const totalTrustlines = assets.reduce((sum, asset) => sum + (asset.accounts?.authorized ?? 0), 0);
+  const totalTrustlines = assets.reduce((sum, asset) => sum + (asset.num_accounts ?? 0), 0);
   const issuerCount = new Set(assets.filter((asset) => asset.asset_issuer).map((asset) => asset.asset_issuer)).size;
 
   const copyText = async (text: string, label = "Copied to clipboard") => {
@@ -223,7 +218,7 @@ function App() {
         <section className="stats-grid" aria-label="Directory statistics">
           <div className="stat-card"><div className="stat-icon violet"><WalletCards size={18} /></div><div className="stat-label">ASSETS LOADED</div><div className="stat-value">{loading ? "—" : amount(assets.length)}<span className="stat-unit">assets</span></div><div className="stat-foot">Current result set</div></div>
           <div className="stat-card"><div className="stat-icon mint"><ShieldCheck size={18} /></div><div className="stat-label">UNIQUE ISSUERS</div><div className="stat-value">{loading ? "—" : amount(issuerCount)}</div><div className="stat-foot">Issuer accounts represented</div></div>
-          <div className="stat-card"><div className="stat-icon blue"><Activity size={18} /></div><div className="stat-label">AUTHORIZED TRUSTLINES</div><div className="stat-value">{loading ? "—" : amount(totalTrustlines)}</div><div className="stat-foot">Across loaded assets</div></div>
+          <div className="stat-card"><div className="stat-icon blue"><Activity size={18} /></div><div className="stat-label">TRUSTLINES</div><div className="stat-value">{loading ? "—" : amount(totalTrustlines)}</div><div className="stat-foot">Across loaded assets</div></div>
           <div className="stat-card network-stat"><div className="stat-icon amber"><Globe2 size={18} /></div><div className="stat-label">NETWORK STATUS</div><div className="stat-value status-value"><span className="pulse-dot" /> Testnet</div><div className="stat-foot">Public Horizon endpoint</div></div>
         </section>
 
@@ -246,15 +241,15 @@ function App() {
           <div className="table-shell">
             <div className="table-scroll">
               <table>
-                <thead><tr><th>ASSET</th><th>ISSUER ACCOUNT</th><th>AUTHORIZED TRUSTLINES</th><th>AUTHORIZED BALANCE</th><th>TYPE</th><th><span className="sr-only">Details</span></th></tr></thead>
+                <thead><tr><th>ASSET</th><th>ISSUER ACCOUNT</th><th>AUTHORIZED TRUSTLINES</th><th>TOTAL SUPPLY</th><th>TYPE</th><th><span className="sr-only">Details</span></th></tr></thead>
                 <tbody>
                   {loading && assets.length === 0 ? Array.from({ length: 5 }, (_, i) => <tr key={i} className="skeleton-row"><td><span className="skeleton wide" /></td><td><span className="skeleton wider" /></td><td><span className="skeleton medium" /></td><td><span className="skeleton medium" /></td><td><span className="skeleton short" /></td><td /></tr>) :
                     visibleAssets.map((asset) => (
                       <tr key={asset.key} className="asset-row" onClick={() => setSelected(asset)} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") setSelected(asset); }}>
                         <td><div className="asset-cell"><AssetMark code={asset.asset_type === "native" ? "XLM" : asset.asset_code} /><div><strong>{asset.asset_type === "native" ? "XLM" : asset.asset_code}</strong><span>{asset.asset_type === "native" ? "Native Stellar asset" : asset.asset_type.replace(/_/g, " ")}</span></div></div></td>
                         <td><button className="issuer-link" onClick={(event) => { event.stopPropagation(); if (asset.asset_issuer) void copyText(asset.asset_issuer, "Issuer address copied"); }}>{asset.asset_issuer ? shortAddress(asset.asset_issuer) : "Native asset"}{asset.asset_issuer && <Copy size={12} />}</button></td>
-                        <td><span className="number-cell">{amount(asset.accounts?.authorized)}</span></td>
-                        <td><span className="number-cell">{amount(asset.balances?.authorized)}</span></td>
+                        <td><span className="number-cell">{amount(asset.num_accounts)}</span></td>
+                        <td><span className="number-cell">{amount(asset.amount)}</span></td>
                         <td><span className={asset.asset_type === "native" ? "type-badge native" : "type-badge"}>{asset.asset_type === "native" ? "Native" : "Classic"}</span></td>
                         <td><button className="row-open" aria-label={`View ${asset.asset_code} details`} onClick={(event) => { event.stopPropagation(); setSelected(asset); }}><ChevronRight size={17} /></button></td>
                       </tr>
@@ -289,7 +284,7 @@ function App() {
           <div className="modal-divider" />
           <div className="detail-label">ISSUER PUBLIC KEY</div>
           <div className="issuer-box"><span>{selected.asset_issuer || "Native asset — no issuer key"}</span>{selected.asset_issuer && <button onClick={() => void copyText(selected.asset_issuer, "Issuer address copied")} aria-label="Copy issuer"><Copy size={15} /></button>}</div>
-          <div className="detail-grid"><div><span>Authorized trustlines</span><strong>{amount(selected.accounts?.authorized)}</strong></div><div><span>Authorized balance</span><strong>{amount(selected.balances?.authorized)}</strong></div><div><span>Unauthorized trustlines</span><strong>{amount(selected.accounts?.unauthorized)}</strong></div><div><span>Asset type</span><strong>{selected.asset_type}</strong></div></div>
+          <div className="detail-grid"><div><span>Authorized trustlines</span><strong>{amount(selected.num_accounts)}</strong></div><div><span>Authorized balance</span><strong>{amount(selected.amount)}</strong></div><div><span>Authorization required</span><strong>{selected.flags?.auth_required ? "Yes" : "No"}</strong></div><div><span>Revocable authorization</span><strong>{selected.flags?.auth_revocable ? "Yes" : "No"}</strong></div></div>
           <div className="modal-warning"><ShieldCheck size={17} /><span>These metrics are on-chain indicators, not a safety rating. Verify issuers independently before interacting with any asset.</span></div>
           <div className="modal-actions"><button className="outline-button" onClick={() => void copyText(`${selected.asset_code || "XLM"}${selected.asset_issuer ? ":" + selected.asset_issuer : ""}`, "Asset identifier copied")}><Copy size={15} /> Copy identifier</button><a className="primary-button" href={assetUrl(selected)} target="_blank" rel="noreferrer">View on Stellar Expert <ExternalLink size={14} /></a></div>
         </section>
